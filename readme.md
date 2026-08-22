@@ -12,10 +12,10 @@ SentinelLog is a high-throughput, centralized log analytics platform designed fo
              | (HTTP POST Batches)
              v
 +-------------------------------------------------------------+
-|               FastAPI Ingestion & AI Engine                 |
+|               FastAPI Ingestion & Telemetry API             |
 |  * Log Normalization & Parsing                              |
-|  * Anomaly Scoring (Isolation Forest on rate/latency)       |
-|  * Semantic Clustering (all-MiniLM-L6-v2 Embeddings)        |
+|  * Statistical Z-Score Anomaly Scoring (Latency & Severity) |
+|  * Keyword & Pattern Taxonomy Error Clustering              |
 +------------------------------+------------------------------+
                                |
                                | (Batch Insert)
@@ -26,15 +26,14 @@ SentinelLog is a high-throughput, centralized log analytics platform designed fo
 |  * Sub-10ms Time-Bucket & Filter Aggregations               |
 +-------------------------------------------------------------+
                                ^
-                               | (REST Polling / SSE)
+                               | (REST Polling via Nginx Reverse Proxy)
 +------------------------------+------------------------------+
-|                    React + Vite Dashboard                   |
+|             Nginx Web Server & React Dashboard              |
 |  * Live Ingestion & Anomaly KPI Cards                       |
 |  * Time-Series Traffic vs. Anomaly Charts                   |
 |  * Live Tailing Log Table with Anomaly Highlights           |
-|  * Semantic Error Cluster Root-Cause Explorer               |
+|  * Root-Cause Incident Explorer                             |
 +-------------------------------------------------------------+
-
 ```
 
 ---
@@ -42,10 +41,11 @@ SentinelLog is a high-throughput, centralized log analytics platform designed fo
 ## Key Features
 
 * **High-Throughput Columnar Storage:** Powered by ClickHouse for sub-millisecond aggregations across millions of log records.
-* **Inline AI Anomaly Scoring:** Uses an Isolation Forest model to evaluate log latency, status code distributions, and burst rates in real time, assigning a confidence score (0.0 to 1.0) to every ingested log.
-* **Semantic Error Clustering:** Vectorizes error messages using `all-MiniLM-L6-v2` embeddings, automatically grouping disparate syntax into unified root-cause incident clusters (e.g., Database Connection Timeouts, Authentication Token Failures).
+* **Inline Anomaly Scoring:** Uses a lightweight moving Z-Score and severity heuristic engine to evaluate log latency, status code distributions, and burst rates in real time, assigning a confidence score (0.0 to 1.0) to every ingested log.
+* **Error Clustering Taxonomy:** Fast microsecond pattern matching engine that automatically groups disparate error syntax into unified root-cause incident clusters (e.g., Database Connection Timeouts, Authentication Token Failures).
 * **Interactive Incident Triage:** Single-pane React interface with live-tailing log feeds, interactive attack injection buttons for demoing, and drill-downs by service and severity.
 * **Production-Ready Ingest Interface:** Exposes a standard HTTP endpoint (`POST /api/logs/ingest`) fully compatible with Fluent Bit, OpenTelemetry Collector, Vector, and Logstash JSON payloads.
+* **Reverse Proxy Web Layer:** Dedicated Nginx container serving static frontend assets with automatic reverse proxy routing to the backend API.
 
 ---
 
@@ -53,9 +53,10 @@ SentinelLog is a high-throughput, centralized log analytics platform designed fo
 
 * **Storage Engine:** ClickHouse 24+
 * **Backend API & Ingestion:** Python 3.11, FastAPI, Uvicorn, ClickHouse Connect
-* **AI & Machine Learning:** Scikit-Learn (Isolation Forest), Sentence-Transformers / ONNX (`all-MiniLM-L6-v2`)
-* **Frontend Dashboard:** React 18, Vite, TypeScript, Tailwind CSS, Chart.js / Recharts, Lucide Icons
-* **Deployment:** Docker, Docker Compose, Nginx
+* **Anomaly & Taxonomy Engine:** Moving Z-Score & Keyword Taxonomy
+* **Frontend Dashboard:** React 18, Vite, TypeScript, Tailwind CSS, Recharts, Lucide Icons
+* **Reverse Proxy & Web Server:** Nginx (Alpine)
+* **Deployment:** Docker, Docker Compose (3 Containers)
 
 ---
 
@@ -67,18 +68,19 @@ log-analyzer/
 |-- init-clickhouse.sql         # Table schemas and primary index definitions
 |-- backend/
 |   |-- Dockerfile
-|   |-- requirements.txt
+|   |-- requirements.txt        # Lightweight dependencies (FastAPI, ClickHouse-Connect)
 |   |-- main.py                 # FastAPI routing and lifecycle management
 |   |-- config.py               # Environment variables and thresholds
 |   |-- db.py                   # ClickHouse connection pool and batch inserter
-|   |-- ai_engine.py            # Anomaly detection and semantic clustering models
+|   |-- ai_engine.py            # Z-Score anomaly detection & pattern taxonomy
 |   `-- simulator.py            # Multi-service log traffic and anomaly generator
 `-- frontend/
-    |-- Dockerfile
-    |-- nginx.conf
+    |-- Dockerfile              # Multi-stage build (Node build + Nginx runtime)
+    |-- nginx.conf              # Web server & API reverse proxy configuration
     |-- package.json
     |-- vite.config.ts
     |-- tailwind.config.js
+    |-- tsconfig.json
     `-- src/
         |-- App.tsx             # Main dashboard layout
         |-- api.ts              # Backend API client
@@ -89,7 +91,6 @@ log-analyzer/
             |-- AnomalyChart.tsx# Ingestion volume and anomaly rate graphs
             |-- LogTable.tsx    # Live tailing table with severity filters
             `-- ClusterView.tsx # Semantic error grouping panels
-
 ```
 
 ---
@@ -107,23 +108,17 @@ log-analyzer/
 ```bash
 git clone https://github.com/your-org/log-analyzer.git
 cd log-analyzer
-
 ```
 
-
-2. Spin up the entire stack using Docker Compose:
+2. Spin up the 3-container stack using Docker Compose:
 ```bash
 docker compose up --build
-
 ```
-
 
 3. Access the interfaces:
 * **Frontend Dashboard:** `http://localhost:3000`
 * **FastAPI Swagger Docs:** `http://localhost:8000/docs`
 * **ClickHouse HTTP Interface:** `http://localhost:8123`
-
-
 
 ---
 
@@ -146,10 +141,7 @@ docker compose up --build
     "latency_ms": 12.4
   }
 ]
-
 ```
-
-
 
 ### Query Logs
 
@@ -161,18 +153,13 @@ docker compose up --build
 * **Endpoint:** `GET /api/metrics`
 * Returns: Total log count, error rates, average latency, p95 latency, and active anomaly counts for the last 60 minutes.
 
-
 * **Endpoint:** `GET /api/metrics/timeseries`
 * Returns: 1-minute bucketed aggregations of normal vs. anomalous traffic.
-
-
 
 ### Semantic Clusters
 
 * **Endpoint:** `GET /api/clusters`
-* Returns: Top recurring error clusters categorized by semantic similarity.
-
-
+* Returns: Top recurring error clusters categorized by pattern taxonomy.
 
 ### Trigger Demo Anomaly
 
@@ -185,14 +172,11 @@ docker compose up --build
 ## Hackathon Demo Script
 
 1. **Baseline Traffic:** On boot, the embedded simulator generates normal operational traffic across `auth-service`, `payment-gateway`, `frontend-proxy`, and `postgres-db`.
-2. **Inject Incident:** From the top-right header in the UI, click **Simulate DB Exhaustion** or trigger via API:
+2. **Inject Incident:** From the top header in the UI, click **Simulate DB Exhaustion** or trigger via API:
 ```bash
 curl -X POST "http://localhost:8000/api/simulator/trigger?scenario=db_pool_exhaustion"
-
 ```
-
-
-3. **Observe AI Detection:**
+3. **Observe Detection:**
 * The **Anomaly Rate** metric card spikes.
 * The **Time-Series Chart** highlights an anomalous volume surge in red.
 * The **Live Log Table** flags incoming 500-level logs with elevated anomaly scores (`> 0.75`).
