@@ -34,11 +34,13 @@ export default function LiveTail() {
       setConnectionStatus('connected');
     };
 
-    es.onmessage = (event) => {
+    const handleNewLog = (event) => {
       if (isPausedRef.current) return;
-
       try {
         const parsedLog = JSON.parse(event.data);
+        if (event.type === 'ai_anomaly') {
+            parsedLog.is_ai_anomaly = true;
+        }
         setLogs((prev) => {
           const next = [...prev, parsedLog];
           return next.slice(-250);
@@ -47,6 +49,9 @@ export default function LiveTail() {
         console.error("Failed to parse SSE log:", err);
       }
     };
+
+    es.onmessage = handleNewLog;
+    es.addEventListener('ai_anomaly', handleNewLog);
 
     es.onerror = () => {
       setConnectionStatus('reconnecting');
@@ -167,12 +172,13 @@ export default function LiveTail() {
         ) : (
           filteredLogs.map((log, index) => {
             const isExpanded = expandedIndex === index;
-            const chipClass = LEVEL_CHIPS[log.level] || 'bg-slate-800 text-slate-300 border-slate-700';
+            const chipClass = log.is_ai_anomaly ? 'bg-red-500/30 text-red-300 border-red-500/70 animate-pulse' : (LEVEL_CHIPS[log.level] || 'bg-slate-800 text-slate-300 border-slate-700');
+            const rowBgClass = log.is_ai_anomaly ? 'bg-red-950/40 border-red-900/50' : 'border-slate-900/60 hover:bg-slate-900/40';
 
             return (
               <div
                 key={index}
-                className="group border-b border-slate-900/60 pb-1 hover:bg-slate-900/40 p-1.5 rounded transition-colors"
+                className={`group border-b p-1.5 rounded transition-colors ${rowBgClass}`}
               >
                 <div className="flex flex-wrap items-center gap-2 cursor-pointer" onClick={() => setExpandedIndex(isExpanded ? null : index)}>
                   <span className="text-slate-600 text-[10px] w-6 flex-shrink-0 font-mono">#{index + 1}</span>

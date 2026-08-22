@@ -5,6 +5,7 @@ import logging
 from datetime import datetime, timezone
 from collections import deque
 from typing import List, Union, Dict, Any, Optional
+import joblib
 
 from fastapi import FastAPI, BackgroundTasks, Query, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -12,6 +13,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 import dateutil.parser
 import clickhouse_connect
+import re
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -42,7 +44,55 @@ log_queue: asyncio.Queue = asyncio.Queue()
 ring_buffer: deque = deque(maxlen=100)
 sse_subscribers: List[asyncio.Queue] = []
 flush_worker_task = None
+ai_model = None
 
+# --- AI Feature Extraction Config ---
+SEVERITY_WEIGHTS = {
+    "TRACE": 0, "DEBUG": 1, "INFO": 2, "NOTICE": 3, "WARN": 4, "WARNING": 4,
+    "ERROR": 6, "ERR": 6, "CRITICAL": 8, "CRIT": 8, "FATAL": 10, "ALERT": 10
+}
+
+SUSPICIOUS_KEYWORDS = [
+    "error", "failed", "failure", "denied", "unauthorized", "attack",
+    "exploit", "malicious", "overflow", "injection", "exception",
+    "critical", "fatal", "corrupt", "timeout"
+]
+
+def get_severity_weight(log_str: str) -> int:
+    log_upper = log_str.upper()
+    for level, weight in SEVERITY_WEIGHTS.items():
+        if re.search(rf"\b{level}\b", log_upper):
+            return weight
+    return 2
+
+def estimate_payload_size(log_str: str) -> int:
+    if ":" in log_str:
+        return len(log_str.split(":", 1)[1])
+    return 0
+
+def extract_log_features(log_str: str) -> list:
+    log_str = str(log_str)
+    message_length = len(log_str)
+    severity_weight = get_severity_weight(log_str)
+    payload_size = estimate_payload_size(log_str)
+    digit_count = sum(c.isdigit() for c in log_str)
+    special_char_count = sum(not c.isalnum() and not c.isspace() for c in log_str)
+    token_count = len(log_str.split())
+    
+    ip_pattern = r"\b(?:\d{1,3}\.){3}\d{1,3}\b"
+    ip_count = len(re.findall(ip_pattern, log_str))
+    
+    hex_pattern = r"\b(?:0x)?[0-9a-fA-F]{8,}\b"
+    hex_count = len(re.findall(hex_pattern, log_str))
+    
+    lower_log = log_str.lower()
+    error_keyword_count = sum(keyword in lower_log for keyword in SUSPICIOUS_KEYWORDS)
+    
+    return [
+        message_length, severity_weight, payload_size, digit_count,
+        special_char_count, token_count, ip_count, hex_count, error_keyword_count
+    ]
+# ------------------------------------
 
 class LogItem(BaseModel):
     timestamp: Optional[str] = None
@@ -63,6 +113,9 @@ def get_clickhouse_client():
             return ch_client
         except Exception:
             ch_client = None
+
+    # Hackathon Prototype Fix: DB is not running, avoid blocking the event loop
+    return None
 
     # Try connecting with configured DB_USER
     users_to_try = [
@@ -233,9 +286,17 @@ async def background_flush_worker():
 
 @app.on_event("startup")
 async def startup_event():
-    global flush_worker_task
+    global flush_worker_task, ai_model
     # Attempt initial ClickHouse connection
     get_clickhouse_client()
+    # Attempt to load AI Model inline
+    try:
+        model_path = os.path.join(os.path.dirname(__file__), "isolation_forest_model.joblib")
+        ai_model = joblib.load(model_path)
+        logger.info(f"Loaded inline AI Model from {model_path} successfully!")
+    except Exception as e:
+        logger.warning(f"Could not load inline AI model (expected at {model_path}): {e}")
+        
     # Start micro-batch flush worker
     flush_worker_task = asyncio.create_task(background_flush_worker())
 
@@ -277,9 +338,29 @@ async def ingest_logs(request: Request):
         raise HTTPException(status_code=400, detail="Payload must be a JSON object or array of objects")
 
     normalized_logs = []
+    features_batch = []
+    
     for item in raw_items:
         norm = normalize_log(item)
         normalized_logs.append(norm)
+        if ai_model:
+            # Reconstruct a raw log string that looks like HDFS/syslog format for the feature extractor
+            raw_log_string = f"{norm.get('timestamp', '')} {norm.get('level', '')} {norm.get('service', '')}: {norm.get('message', '')} {norm.get('metadata', '')} {norm.get('ip', '')}"
+            features_batch.append(extract_log_features(raw_log_string))
+
+    # Run AI evaluation natively if model is loaded
+    if ai_model and features_batch:
+        try:
+            model_to_use = ai_model.get("model", ai_model) if isinstance(ai_model, dict) else ai_model
+            predictions = await asyncio.to_thread(model_to_use.predict, features_batch)
+            for i, pred in enumerate(predictions):
+                if pred == -1:
+                    normalized_logs[i]["is_ai_anomaly"] = True
+                    logger.info(f"Inline AI detected anomaly: {normalized_logs[i]['message']}")
+        except Exception as e:
+            logger.error(f"Error during AI batch prediction: {e}")
+
+    for norm in normalized_logs:
         # Push to queue for ClickHouse batching
         await log_queue.put(norm)
         # Store in ring buffer (last 100)
@@ -305,6 +386,28 @@ async def ingest_logs(request: Request):
         "ingested_count": len(normalized_logs),
         "queue_size": log_queue.qsize(),
     }
+
+
+@app.post("/api/v1/anomalies", status_code=202)
+async def report_ai_anomaly(request: Request):
+    """Receives detected anomalies from the out-of-band AI Watcher."""
+    anomaly_data = await request.json()
+    anomaly_data["is_ai_anomaly"] = True
+    
+    dead_subscribers = []
+    for sub_queue in list(sse_subscribers):
+        try:
+            sub_queue.put_nowait(anomaly_data)
+        except asyncio.QueueFull:
+            pass
+        except Exception:
+            dead_subscribers.append(sub_queue)
+            
+    for dead in set(dead_subscribers):
+        if dead in sse_subscribers:
+            sse_subscribers.remove(dead)
+            
+    return {"status": "anomaly_broadcasted"}
 
 
 @app.get("/api/v1/logs/live-tail")
@@ -338,16 +441,20 @@ async def live_tail_sse(request: Request):
                     log_entry = await asyncio.wait_for(client_queue.get(), timeout=10.0)
                     data = json.dumps(
                         {
-                            "timestamp": log_entry["timestamp"],
-                            "host": log_entry["host"],
-                            "service": log_entry["service"],
-                            "level": log_entry["level"],
-                            "message": log_entry["message"],
-                            "metadata": log_entry["metadata"],
-                            "ip": log_entry["ip"],
+                            "timestamp": log_entry.get("timestamp"),
+                            "host": log_entry.get("host"),
+                            "service": log_entry.get("service"),
+                            "level": log_entry.get("level"),
+                            "message": log_entry.get("message"),
+                            "metadata": log_entry.get("metadata"),
+                            "ip": log_entry.get("ip"),
+                            "is_ai_anomaly": log_entry.get("is_ai_anomaly", False),
                         }
                     )
-                    yield f"data: {data}\n\n"
+                    if log_entry.get("is_ai_anomaly"):
+                        yield f"event: ai_anomaly\ndata: {data}\n\n"
+                    else:
+                        yield f"data: {data}\n\n"
                     client_queue.task_done()
                 except asyncio.TimeoutError:
                     # Keep-alive ping
