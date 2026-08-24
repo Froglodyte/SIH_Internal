@@ -114,9 +114,6 @@ def get_clickhouse_client():
         except Exception:
             ch_client = None
 
-    # Hackathon Prototype Fix: DB is not running, avoid blocking the event loop
-    return None
-
     # Try connecting with configured DB_USER
     users_to_try = [
         (DB_USER, DB_PASSWORD),
