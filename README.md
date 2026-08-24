@@ -35,10 +35,7 @@
 ---
 
 <a id="executive-overview"></a>
-<<<<<<< Updated upstream
-=======
 
->>>>>>> Stashed changes
 ## 🚀 Executive Overview
 
 The **Centralized IT System Log & Telemetry Analyzer**, branded **Synapse // Intelligence Hub**, is an enterprise-grade, containerized log-ingestion, analytics, and real-time monitoring platform for mission-critical IT infrastructure.
@@ -50,11 +47,7 @@ Engineered to handle high-velocity log payloads without dropping streams, Synaps
   |  Web Nodes (01)   |      |   Auth Nodes (02)     |      |    Database Nodes     |
   +-------------------+      +-----------------------+      +-----------------------+
             |                          |                             |
-<<<<<<< Updated upstream
-            +----------------------------+------------------------------+
-=======
             +--------------------------+------------------------------+
->>>>>>> Stashed changes
                                        | HTTP POST /api/v1/logs
                                        v
                      +--------------------------------------+
@@ -74,10 +67,7 @@ Engineered to handle high-velocity log payloads without dropping streams, Synaps
 ```
 
 <a id="system-architecture"></a>
-<<<<<<< Updated upstream
-=======
 
->>>>>>> Stashed changes
 ## 🏗️ System Architecture & Data Flow
 
 ```mermaid
@@ -139,13 +129,9 @@ flowchart TD
 5. **Columnar data warehouse** — ClickHouse stores records in a MergeTree table ordered by `(level, service, timestamp)` for high-speed analytical queries.
 6. **Analytics engine** — The backend uses `toStartOfInterval(timestamp, INTERVAL 10 SECOND)` to produce metric overviews, system-health states (`NOMINAL`, `DEGRADED`, `CRITICAL`), top failing services, and active-host rankings.
 7. **Synapse AI Engine** — From the Anomaly Evaluation HUD, users can submit error spikes to Gemini 3.5 Flash for root-cause summaries and remediation steps inside a resizable slide-out drawer.
-<<<<<<< Updated upstream
-=======
 
 <a id="key-innovations"></a>
->>>>>>> Stashed changes
 
-<a id="key-innovations"></a>
 ## 🔥 Key Innovations & Technical Capabilities
 
 - **Sub-second columnar analytics:** ClickHouse MergeTree storage and `LowCardinality` strings for `host`, `service`, and `level` attributes.
@@ -155,13 +141,9 @@ flowchart TD
 - **Real-time SSE:** A continuous, zero-polling telemetry stream with typed events such as `event: ai_anomaly` and connection indicators.
 - **Resilient fallback design:** When the database is initializing or temporarily unavailable, the backend falls back to in-memory ring-buffer telemetry to help prevent downtime.
 - **Tactical cyberpunk dashboard:** Dark-mode UI with a resizable AI drawer, selectable intervals (`15m`, `1h`, `6h`, `24h`), live charts, threat matrices, and payload inspectors.
-<<<<<<< Updated upstream
-=======
 
 <a id="tech-stack"></a>
->>>>>>> Stashed changes
 
-<a id="tech-stack"></a>
 ## 🛠️ Tech Stack & Infrastructure
 
 | Layer              | Technology                            | Description                                                              |
@@ -207,10 +189,7 @@ flowchart TB
 ```
 
 <a id="database-schema"></a>
-<<<<<<< Updated upstream
-=======
 
->>>>>>> Stashed changes
 ## 🗄️ Database Schema Specification
 
 **File:** `init-db/01_init.sql`
@@ -236,13 +215,9 @@ SETTINGS index_granularity = 8192;
 - **`LowCardinality(String)`** — Used for low-cardinality fields (`host`, `service`, and `level`), reducing disk-storage size by up to 85%.
 - **`DateTime64(3, 'UTC')`** — Millisecond-precision timestamps for microsecond-accurate time-series bucket grouping.
 - **`ORDER BY (level, service, timestamp)`** — Optimized for filters targeting log severity and services over time ranges.
-<<<<<<< Updated upstream
-=======
 
 <a id="machine-learning"></a>
->>>>>>> Stashed changes
 
-<a id="machine-learning"></a>
 ## 🤖 Machine Learning Anomaly Detection Subsystem
 
 The backend includes an inline AI engine that analyses incoming log streams for behavioral and structural anomalies before database persistence.
@@ -282,9 +257,6 @@ flowchart LR
 ```
 
 <a id="synapse-ai"></a>
-<<<<<<< Updated upstream
-## 🧠 Synapse AI // LLM Diagnostic Engine (Gemini 3.5 Flash)
-=======
 
 ## 🧠 Synapse AI // LLM Diagnostic Engine (Gemini 3.5 Flash)
 
@@ -301,21 +273,7 @@ Built into the FastAPI backend and exposed through the React dashboard’s anoma
 - **Dynamic, resizable interface:** A slide-out drawer with a live mouse-drag handle on its left border supports flexible inspection.
 
 <a id="api-endpoints"></a>
->>>>>>> Stashed changes
 
-Built into the FastAPI backend and exposed through the React dashboard’s anomaly-evaluation matrix, the **Synapse AI Engine** uses Google’s Gemini 3.5 Flash model as an automated, on-call Site Reliability Engineer.
-
-### LLM analyzer capabilities
-
-- **Batch anomaly-context evaluation:** Rather than examining isolated entries one by one, users initiate diagnostics from a service-failure spike (for example, `oauth-provider` recording 149 errors) and supply rich aggregate failure metrics to the LLM.
-- **Structured SRE incident cards:** Raw model output is parsed into dedicated, color-coded UI sections:
-  - `[ INCIDENT SUMMARY ]` — A concise, one-sentence explanation of the failure mode.
-  - `[ PROBABLE ROOT CAUSE ]` — A bulleted list of likely internal or environmental factors.
-  - `[ REMEDIATION STEPS ]` — Actionable operational commands, including ready-to-run CLI/Bash scripts and SQL adjustments.
-- **Stateless conversational guardrails:** Follow-up messages are handled cleanly. A specialized system prompt prevents looping or repeated summaries when users provide confirmations such as “okay” or “got it”.
-- **Dynamic, resizable interface:** A slide-out drawer with a live mouse-drag handle on its left border supports flexible inspection.
-
-<a id="api-endpoints"></a>
 ## 📡 API Endpoints Reference
 
 ### 1. Log Ingestion API
@@ -419,8 +377,6 @@ Built into the FastAPI backend and exposed through the React dashboard’s anoma
 | Response         | A list of filtered log records directly from ClickHouse storage.        |
 
 ### 7. Health & System Metrics API
-<<<<<<< Updated upstream
-=======
 
 | Property | Value                                                                                                           |
 | -------- | --------------------------------------------------------------------------------------------------------------- |
@@ -428,14 +384,7 @@ Built into the FastAPI backend and exposed through the React dashboard’s anoma
 | Response | Database connection status, current asynchronous queue size, ring-buffer size, and active SSE-subscriber count. |
 
 <a id="performance-metrics"></a>
->>>>>>> Stashed changes
 
-| Property | Value                                                                                                           |
-| -------- | --------------------------------------------------------------------------------------------------------------- |
-| Endpoint | `GET /health` or `GET /api/v1/health`                                                                           |
-| Response | Database connection status, current asynchronous queue size, ring-buffer size, and active SSE-subscriber count. |
-
-<a id="performance-metrics"></a>
 ## 📊 Performance Metrics & Benchmark Results
 
 | Metric / specification             |                       Target |               Measured performance |
@@ -448,13 +397,9 @@ Built into the FastAPI backend and exposed through the React dashboard’s anoma
 | Columnar data compression          |              > 70% reduction | ~85% efficiency (`LowCardinality`) |
 | Throughput (50 concurrent workers) |                > 500 req/sec |                    ~1,120+ req/sec |
 | Container cold-launch time         |                 < 15 seconds |                       ~7.0 seconds |
-<<<<<<< Updated upstream
-=======
 
 <a id="getting-started"></a>
->>>>>>> Stashed changes
 
-<a id="getting-started"></a>
 ## 💻 Getting Started & Deployment
 
 ### Prerequisites
@@ -530,8 +475,6 @@ PORT=8080
    pip install -r requirements.txt
    DB_HOST=localhost DB_PORT=8123 GEMINI_API_KEY=your_key uvicorn main:app --host 0.0.0.0 --port 8080 --reload
    ```
-<<<<<<< Updated upstream
-=======
 
 3. Run the Vite React frontend:
 
@@ -544,19 +487,7 @@ PORT=8080
    Navigate to <http://localhost:3000>.
 
 <a id="verification"></a>
->>>>>>> Stashed changes
 
-3. Run the Vite React frontend:
-
-   ```bash
-   cd frontend
-   npm install
-   npm run dev
-   ```
-
-   Navigate to <http://localhost:3000>.
-
-<a id="verification"></a>
 ## 🧪 Verification & Test Scripts
 
 The repository provides automated scripts in `scripts/`.
@@ -586,10 +517,7 @@ python3 scripts/test_anomalies.py
 ```
 
 <a id="system-audit"></a>
-<<<<<<< Updated upstream
-=======
 
->>>>>>> Stashed changes
 ## 🔍 System Audit & Resolved Discrepancies
 
 During full codebase audit, the following discrepancies were identified and resolved:
