@@ -81,7 +81,7 @@ export default function App() {
 
   useEffect(() => {
     fetchAnalytics();
-    const interval = setInterval(fetchAnalytics, 5000);
+    const interval = setInterval(fetchAnalytics, 1000);
     return () => clearInterval(interval);
   }, [timeRange]);
 

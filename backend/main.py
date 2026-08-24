@@ -504,7 +504,7 @@ async def get_analytics_overview(range: str = Query(default="15m")):
         # 1. Time-series query bucketed by 10 seconds
         ts_query = f"""
             SELECT 
-                toStartOfInterval(timestamp, INTERVAL 10 SECOND) as time_bucket,
+                toStartOfInterval(timestamp, INTERVAL 5 SECOND) as time_bucket,
                 count() as total,
                 countIf(level IN ('ERROR', 'CRITICAL')) as errors,
                 countIf(level IN ('INFO', 'WARN')) as normal

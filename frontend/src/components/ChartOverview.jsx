@@ -147,6 +147,7 @@ export default function ChartOverview({ analyticsData }) {
                     strokeWidth={2}
                     fillOpacity={1}
                     fill="url(#cyberTotal)"
+                    isAnimationActive={false}
                   />
                   <Area
                     type="monotone"
@@ -156,6 +157,7 @@ export default function ChartOverview({ analyticsData }) {
                     strokeWidth={2.5}
                     fillOpacity={1}
                     fill="url(#cyberErrors)"
+                    isAnimationActive={false}
                   />
                 </AreaChart>
               </ResponsiveContainer>
