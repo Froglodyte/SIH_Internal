@@ -16,28 +16,28 @@ import {
 import { Activity, Server, AlertCircle, PieChart as PieIcon, Layers, Radio } from 'lucide-react';
 
 const LEVEL_HEX = {
-  INFO: '#00f0ff',      // Neon Cyan
-  WARN: '#f59e0b',      // Amber
-  ERROR: '#ff0055',     // Cyber Crimson Red
-  CRITICAL: '#a855f7',  // Neon Purple
+  INFO: '#0284c7',      // Sky Blue
+  WARN: '#d97706',      // Amber
+  ERROR: '#e11d48',     // Rose Red
+  CRITICAL: '#7e22ce',  // Purple
 };
 
 const CustomTooltip = ({ active, payload, label }) => {
   if (active && payload && payload.length) {
     const formattedTime = label ? new Date(label).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : label;
     return (
-      <div className="bg-slate-950/95 border border-slate-700/80 p-3 rounded shadow-2xl text-xs font-mono backdrop-blur-md">
-        <p className="font-semibold text-slate-300 mb-1 border-b border-slate-800 pb-1 flex items-center justify-between gap-4">
+      <div className="bg-white/95 border border-slate-200 p-3 rounded-lg shadow-xl text-xs font-mono backdrop-blur-md text-slate-800">
+        <p className="font-semibold text-slate-700 mb-1 border-b border-slate-200 pb-1 flex items-center justify-between gap-4">
           <span>TIME: {formattedTime}</span>
-          <span className="text-cyan-400 text-[10px]">10s BUCKET</span>
+          <span className="text-cyan-600 text-[10px] font-bold">10s BUCKET</span>
         </p>
         {payload.map((entry, index) => (
           <div key={`item-${index}`} className="flex items-center justify-between gap-6 py-0.5">
-            <span className="flex items-center gap-1.5 text-slate-400">
+            <span className="flex items-center gap-1.5 text-slate-600">
               <span className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.color }} />
               {entry.name}:
             </span>
-            <span className="font-bold text-white">{entry.value}</span>
+            <span className="font-bold text-slate-900">{entry.value}</span>
           </div>
         ))}
       </div>
@@ -76,39 +76,39 @@ export default function ChartOverview({ analyticsData }) {
         {/* Header bar */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
           <div className="flex items-center gap-3">
-            <div className="p-2 rounded bg-cyan-500/10 text-cyan-400 border border-cyan-500/30">
+            <div className="p-2 rounded-lg bg-cyan-50 text-cyan-600 border border-cyan-200">
               <Activity className="w-5 h-5" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="text-sm font-mono font-bold uppercase tracking-wider text-slate-100">
+                <h2 className="text-sm font-mono font-bold uppercase tracking-wider text-slate-900">
                   Telemetry & Ingestion Performance Radar
                 </h2>
-                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold">
                   LIVE FEED
                 </span>
               </div>
-              <p className="text-xs text-slate-400">Continuous ClickHouse 10s interval aggregation</p>
+              <p className="text-xs text-slate-500">Continuous ClickHouse 10s interval aggregation</p>
             </div>
           </div>
 
-          <div className="flex items-center gap-1 bg-slate-950 p-1 rounded border border-slate-800 font-mono text-xs">
+          <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg border border-slate-200 font-mono text-xs">
             <button
               onClick={() => setActiveTab('overview')}
-              className={`px-3 py-1 rounded transition-all ${
+              className={`px-3 py-1 rounded-md transition-all ${
                 activeTab === 'overview'
-                  ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 font-bold'
-                  : 'text-slate-400 hover:text-slate-200'
+                  ? 'bg-white text-cyan-800 border border-slate-300 font-bold shadow-sm'
+                  : 'text-slate-600 hover:text-slate-900'
               }`}
             >
               TRAFFIC TELEMETRY
             </button>
             <button
               onClick={() => setActiveTab('breakdown')}
-              className={`px-3 py-1 rounded transition-all ${
+              className={`px-3 py-1 rounded-md transition-all ${
                 activeTab === 'breakdown'
-                  ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 font-bold'
-                  : 'text-slate-400 hover:text-slate-200'
+                  ? 'bg-white text-cyan-800 border border-slate-300 font-bold shadow-sm'
+                  : 'text-slate-600 hover:text-slate-900'
               }`}
             >
               DISTRIBUTION RADAR
@@ -119,7 +119,7 @@ export default function ChartOverview({ analyticsData }) {
         {activeTab === 'overview' ? (
           <div className="h-72 w-full">
             {formattedTimeSeries.length === 0 ? (
-              <div className="h-full flex items-center justify-center text-slate-500 text-xs font-mono">
+              <div className="h-full flex items-center justify-center text-slate-400 text-xs font-mono">
                 [NO DATA IN RANGE] Run simulator to project telemetry streams into ClickHouse.
               </div>
             ) : (
@@ -127,15 +127,15 @@ export default function ChartOverview({ analyticsData }) {
                 <AreaChart data={formattedTimeSeries} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                   <defs>
                     <linearGradient id="cyberTotal" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#00f0ff" stopOpacity={0.4} />
-                      <stop offset="95%" stopColor="#00f0ff" stopOpacity={0.0} />
+                      <stop offset="5%" stopColor="#0284c7" stopOpacity={0.25} />
+                      <stop offset="95%" stopColor="#0284c7" stopOpacity={0.0} />
                     </linearGradient>
                     <linearGradient id="cyberErrors" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#ff0055" stopOpacity={0.8} />
-                      <stop offset="95%" stopColor="#ff0055" stopOpacity={0.05} />
+                      <stop offset="5%" stopColor="#e11d48" stopOpacity={0.4} />
+                      <stop offset="95%" stopColor="#e11d48" stopOpacity={0.02} />
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="2 4" stroke="#1e293b" />
+                  <CartesianGrid strokeDasharray="2 4" stroke="#e2e8f0" />
                   <XAxis dataKey="formattedTime" stroke="#64748b" fontSize={10} fontFamily="JetBrains Mono" tickLine={false} />
                   <YAxis stroke="#64748b" fontSize={10} fontFamily="JetBrains Mono" tickLine={false} />
                   <Tooltip content={<CustomTooltip />} />
@@ -143,7 +143,7 @@ export default function ChartOverview({ analyticsData }) {
                     type="monotone"
                     dataKey="total"
                     name="Total Log Volume"
-                    stroke="#00f0ff"
+                    stroke="#0284c7"
                     strokeWidth={2}
                     fillOpacity={1}
                     fill="url(#cyberTotal)"
@@ -152,7 +152,7 @@ export default function ChartOverview({ analyticsData }) {
                     type="monotone"
                     dataKey="errors"
                     name="Error/Critical Spikes"
-                    stroke="#ff0055"
+                    stroke="#e11d48"
                     strokeWidth={2.5}
                     fillOpacity={1}
                     fill="url(#cyberErrors)"
@@ -164,13 +164,13 @@ export default function ChartOverview({ analyticsData }) {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 h-72">
             {/* Level Pie */}
-            <div className="p-3 bg-slate-950/60 rounded border border-slate-800 flex flex-col items-center justify-center">
-              <span className="text-xs font-mono font-bold text-slate-300 mb-2 flex items-center gap-1.5">
-                <PieIcon className="w-4 h-4 text-cyan-400" /> LOG LEVEL MATRIX
+            <div className="p-3 bg-slate-50/80 rounded-lg border border-slate-200 flex flex-col items-center justify-center">
+              <span className="text-xs font-mono font-bold text-slate-700 mb-2 flex items-center gap-1.5">
+                <PieIcon className="w-4 h-4 text-cyan-600" /> LOG LEVEL MATRIX
               </span>
               <div className="h-44 w-full">
                 {totalPieValues === 0 ? (
-                  <div className="h-full flex items-center justify-center text-xs text-slate-500 font-mono">
+                  <div className="h-full flex items-center justify-center text-xs text-slate-400 font-mono">
                     Zero log levels in window
                   </div>
                 ) : (
@@ -198,29 +198,29 @@ export default function ChartOverview({ analyticsData }) {
                 {pieData.map((d) => (
                   <div key={d.name} className="flex items-center gap-1">
                     <span className="w-2 h-2 rounded-full" style={{ backgroundColor: d.color }} />
-                    <span className="text-slate-400">{d.name}</span>
+                    <span className="text-slate-600 font-medium">{d.name}</span>
                   </div>
                 ))}
               </div>
             </div>
 
             {/* Failing Services */}
-            <div className="p-3 bg-slate-950/60 rounded border border-slate-800 flex flex-col">
-              <span className="text-xs font-mono font-bold text-slate-300 mb-2 flex items-center gap-1.5">
-                <AlertCircle className="w-4 h-4 text-rose-400" /> FAILING SERVICE RANKS
+            <div className="p-3 bg-slate-50/80 rounded-lg border border-slate-200 flex flex-col">
+              <span className="text-xs font-mono font-bold text-slate-700 mb-2 flex items-center gap-1.5">
+                <AlertCircle className="w-4 h-4 text-rose-600" /> FAILING SERVICE RANKS
               </span>
               <div className="flex-1 w-full">
                 {failingServices.length === 0 ? (
-                  <div className="h-full flex items-center justify-center text-xs text-slate-500 font-mono">
+                  <div className="h-full flex items-center justify-center text-xs text-slate-400 font-mono">
                     Zero failing services
                   </div>
                 ) : (
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart layout="vertical" data={failingServices} margin={{ left: -10, right: 10 }}>
                       <XAxis type="number" stroke="#64748b" fontSize={10} hide />
-                      <YAxis dataKey="service" type="category" stroke="#94a3b8" fontSize={10} width={85} fontFamily="JetBrains Mono" />
+                      <YAxis dataKey="service" type="category" stroke="#475569" fontSize={10} width={85} fontFamily="JetBrains Mono" />
                       <Tooltip />
-                      <Bar dataKey="error_count" name="Errors" fill="#ff0055" radius={[0, 2, 2, 0]} />
+                      <Bar dataKey="error_count" name="Errors" fill="#e11d48" radius={[0, 2, 2, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 )}
@@ -228,22 +228,22 @@ export default function ChartOverview({ analyticsData }) {
             </div>
 
             {/* Active hosts */}
-            <div className="p-3 bg-slate-950/60 rounded border border-slate-800 flex flex-col">
-              <span className="text-xs font-mono font-bold text-slate-300 mb-2 flex items-center gap-1.5">
-                <Server className="w-4 h-4 text-cyan-400" /> HOST NODE ACTIVITY RADAR
+            <div className="p-3 bg-slate-50/80 rounded-lg border border-slate-200 flex flex-col">
+              <span className="text-xs font-mono font-bold text-slate-700 mb-2 flex items-center gap-1.5">
+                <Server className="w-4 h-4 text-cyan-600" /> HOST NODE ACTIVITY RADAR
               </span>
               <div className="flex-1 w-full">
                 {activeHosts.length === 0 ? (
-                  <div className="h-full flex items-center justify-center text-xs text-slate-500 font-mono">
+                  <div className="h-full flex items-center justify-center text-xs text-slate-400 font-mono">
                     No active hosts reporting
                   </div>
                 ) : (
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart layout="vertical" data={activeHosts} margin={{ left: -10, right: 10 }}>
                       <XAxis type="number" stroke="#64748b" fontSize={10} hide />
-                      <YAxis dataKey="host" type="category" stroke="#94a3b8" fontSize={10} width={85} fontFamily="JetBrains Mono" />
+                      <YAxis dataKey="host" type="category" stroke="#475569" fontSize={10} width={85} fontFamily="JetBrains Mono" />
                       <Tooltip />
-                      <Bar dataKey="count" name="Logs" fill="#00f0ff" radius={[0, 2, 2, 0]} />
+                      <Bar dataKey="count" name="Logs" fill="#0284c7" radius={[0, 2, 2, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 )}
