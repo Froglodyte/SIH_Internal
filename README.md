@@ -52,39 +52,49 @@ Engineered to handle high-velocity log payloads without dropping streams, the pl
 
 ## 🏗️ System Architecture & Data Flow
 
-```text
-+-----------------------------------------------------------------------------------+
-|                                  LOG PRODUCERS                                    |
-|   web-node-01                 auth-node-02                 db-node-03             |
-+-----------------------------------------------------------------------------------+
-                                         |
-                                         | HTTP POST /api/v1/logs (Single or Batch)
-                                         v
-+-----------------------------------------------------------------------------------+
-|                             BACKEND API GATEWAY (FastAPI)                         |
-|                                                                                   |
-|  +---------------------------+       +-----------------------------------------+  |
-|  |   Async Ingestion Queue   |       |    Inline Machine Learning Engine      |  |
-|  |  (250ms / 500 Batch Flush)  |       |   (Isolation Forest AI Anomaly Check)   |  |
-|  +---------------------------+       +-----------------------------------------+  |
-|                |                                               |                  |
-|                | Native Columnar Inserts                       | Ring Buffer      |
-|                v                                               v                  |
-|  +---------------------------+       +-----------------------------------------+  |
-|  |   ClickHouse Client Pool  |       |   GET /api/v1/logs/live-tail (SSE Stream) |  |
-|  +---------------------------+       +-----------------------------------------+  |
-+-----------------------------------------------------------------------------------+
-                 |                                               |
-                 | SQL Queries (10s Aggregations)                | Event Streaming
-                 v                                               v
-+------------------------------------+        +-------------------------------------+
-|      DATABASE ENGINE (ClickHouse)  |        |     FRONTEND DASHBOARD (Nginx/React)|
-|                                    |        |                                     |
-|  Database: log_analytics           |        |  - Command Matrix HUD               |
-|  Table: logs (MergeTree)           | <----> |  - Time-Series Error Area Charts    |
-|  Ordering Key:                     |  REST  |  - SSE Telemetry Stream Console       |
-|    (level, service, timestamp)     |        |  - ClickHouse Query Studio          |
-+------------------------------------+        +-------------------------------------+
+```mermaid
+flowchart TD
+    subgraph PRODUCERS["Distributed Log Producers"]
+        P1["web-node-01<br/>(Gateway / CDN)"]
+        P2["auth-node-02<br/>(OAuth / JWT)"]
+        P3["db-node-03<br/>(Postgres / Redis)"]
+    end
+
+    subgraph GATEWAY["FastAPI Ingestion Gateway (:8080)"]
+        INGEST["POST /api/v1/logs<br/>(Single / JSON Array)"]
+        NORM["Data Normalizer<br/>(UTC DateTime64 / Strings)"]
+        FEAT["9-Feature Extraction<br/>(Length, Hex, IP, Keyword, Severity)"]
+        AI{"Inline AI Model<br/>(Isolation Forest)"}
+        
+        QUEUE["In-Memory Async Queue<br/>(asyncio.Queue)"]
+        RING["Ring Buffer Deque<br/>(Last 100 Logs)"]
+        WORKER["Micro-Batch Flush Worker<br/>(250ms / 500 records)"]
+    end
+
+    subgraph STORAGE["ClickHouse Storage Tier (:8123)"]
+        CH[("ClickHouse MergeTree<br/>Table: log_analytics.logs<br/>ORDER BY (level, service, timestamp)<br/>index_granularity = 8192")]
+    end
+
+    subgraph HUD["React 18 Dashboard (:3000)"]
+        DASH["Command Matrix HUD<br/>(10s Time-Bucket Radar)"]
+        SSE["SSE Telemetry Terminal<br/>(/api/v1/logs/live-tail)"]
+        EXP["ClickHouse Query Studio<br/>(Log Explorer)"]
+    end
+
+    P1 & P2 & P3 -->|HTTP POST JSON| INGEST
+    INGEST --> NORM
+    NORM --> FEAT
+    FEAT --> AI
+
+    AI -->|is_ai_anomaly: true/false| QUEUE
+    AI -->|Real-time Push| RING
+
+    QUEUE --> WORKER
+    WORKER -->|Vectorized Batch Inserts| CH
+
+    RING -->|EventSource Stream| SSE
+    CH -.->|Sub-Second SQL Aggregations| DASH
+    CH -.->|Filtered Query Studio| EXP
 ```
 
 ### Data Flow Pipeline
@@ -121,6 +131,35 @@ Engineered to handle high-velocity log payloads without dropping streams, the pl
 | **Visualization** | Recharts | Interactive time-series area charts, pie charts, and bar charts |
 | **Web Server / Proxy** | Nginx (Alpine) | Multi-stage Docker deployment serving static assets & proxying `/api/` |
 | **Containerization** | Docker & Docker Compose | Multi-container orchestration linking `database`, `backend`, and `frontend` |
+
+```mermaid
+flowchart TB
+    subgraph TIER1["PRODUCER LAYER"]
+        L1["Distributed Node Machines<br/>(web-node-01, auth-node-02, db-node-03)"]
+        L1_TOOL["Python Stochastic Simulator / Fluent Bit / Vector Forwarders"]
+    end
+
+    subgraph TIER2["INGESTION & ML GATEWAY LAYER"]
+        L2["FastAPI Async Web Gateway (:8080)"]
+        L2_FEAT["AsyncIO Micro-Batch Worker (250ms/500 items) • Ring Buffer Deque<br/>Scikit-Learn Isolation Forest AI Engine • ClickHouse-Connect Pool"]
+    end
+
+    subgraph TIER3["DATABASE & DATA WAREHOUSE LAYER"]
+        L3["ClickHouse Columnar Storage Engine (:8123 / :9000)"]
+        L3_FEAT["MergeTree Table • LowCardinality Compression • SIMD Vector Analytics"]
+    end
+
+    subgraph TIER4["REVERSE PROXY & PRESENTATION LAYER"]
+        L4["Nginx (Alpine) Reverse Proxy (:3000 -> :80)"]
+        L5["React 18 Dashboard HUD (Vite + Tailwind CSS + Recharts + SSE)"]
+    end
+
+    TIER1 ==>|HTTP POST JSON| TIER2
+    TIER2 ==>|Micro-Batch Inserts| TIER3
+    TIER3 -.->|SQL Aggregations| TIER2
+    TIER2 ==>|SSE Telemetry & REST| T4["Reverse Proxy"]
+    T4 ==>|Proxied Streams & UI| L5
+```
 
 ---
 
@@ -171,6 +210,18 @@ Each log message is transformed into a numerical feature vector:
 - Model File: `backend/isolation_forest_model.joblib`
 - Inference: Evaluated asynchronously via `asyncio.to_thread`.
 - Anomaly Flagging: Anomalous logs return prediction `-1`, triggering `is_ai_anomaly = True` and emitting a dedicated SSE event type (`event: ai_anomaly`).
+
+```mermaid
+flowchart LR
+    RAW["Raw Log Item"] --> EXT["9-Feature Extraction<br/>(Length, Weight, Digits, Specials, Tokens, IPs, Hex, Keywords)"]
+    EXT --> VEC["Numerical Vector [x1..x9]"]
+    VEC --> MODEL{"Isolation Forest<br/>Model Inference"}
+    MODEL -->|Prediction: +1| NORM["Normal Log<br/>(is_ai_anomaly: false)"]
+    MODEL -->|Prediction: -1| ANOM["Anomaly Threat<br/>(is_ai_anomaly: true)"]
+    ANOM --> SSE["Live Broadcast<br/>event: ai_anomaly"]
+    NORM --> STORE["Micro-Batch Buffer"]
+    ANOM --> STORE
+```
 
 ---
 

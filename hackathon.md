@@ -13,6 +13,7 @@
 5. [Comprehensive Hackathon & Viva Q&A (50+ Categorized Questions)](#5-comprehensive-hackathon--viva-qa-50-categorized-questions)
 6. [Tough Trap Questions & Winning Judge Responses](#6-tough-trap-questions--winning-judge-responses)
 7. [Live Demo Script & Verification Command Matrix](#7-live-demo-script--verification-command-matrix)
+8. [Comprehensive Visual Flowcharts & Architectural Diagrams](#8-comprehensive-visual-flowcharts--architectural-diagrams)
 
 ---
 
@@ -349,6 +350,255 @@ WHERE level IN ('ERROR', 'CRITICAL')
 GROUP BY service 
 ORDER BY errors DESC 
 LIMIT 5;
+```
+
+---
+
+## 8. Comprehensive Visual Flowcharts & Architectural Diagrams
+
+### Flowchart 1: End-to-End Log Ingestion & Micro-Batch Pipeline
+
+```mermaid
+flowchart TD
+    subgraph P["1. Distributed Node Producers"]
+        P1["web-node-01<br/>(Nginx, API Gateway, CDN)"]
+        P2["auth-node-02<br/>(JWT Verifier, OAuth)"]
+        P3["db-node-03<br/>(Postgres, Redis, Worker)"]
+    end
+
+    subgraph G["2. FastAPI Ingestion Gateway (:8080)"]
+        EP["POST /api/v1/logs<br/>(Accepts Single Object or Batch Array)"]
+        PARSE["Payload Normalization<br/>- Parse Datetime to UTC DateTime64<br/>- Clean Strings & Serialize Metadata"]
+        FEAT["Feature Extraction Engine<br/>(Extracts 9-Dimensional Numerical Vector)"]
+        MODEL{"Inline AI Scoring<br/>(Isolation Forest Model)"}
+        TAG_NORM["Tag Normal Log<br/>(is_ai_anomaly: false)"]
+        TAG_ANOM["Flag Anomaly<br/>(is_ai_anomaly: true)"]
+        DISPATCH["Dual-Dispatch Fan-Out"]
+    end
+
+    subgraph M["3. Memory & Streaming Tier"]
+        QUEUE["In-Memory Async Queue<br/>(asyncio.Queue)"]
+        RING["Circular Ring Buffer<br/>(deque maxlen=100)"]
+        SSE_HUB["SSE Broadcaster<br/>(Pushes to active client queues)"]
+        WORKER["Background Flush Worker<br/>(Triggers every 250ms OR 500 items)"]
+    end
+
+    subgraph S["4. Columnar Storage Tier (:8123)"]
+        CH_CLIENT["ClickHouse Native Client Pool"]
+        CH_TABLE[("ClickHouse MergeTree<br/>Table: log_analytics.logs<br/>ORDER BY (level, service, timestamp)<br/>index_granularity = 8192")]
+    end
+
+    subgraph UI["5. Frontend Presentation Tier (:3000)"]
+        DASH["React 18 Dashboard HUD<br/>(Nginx Reverse Proxy)"]
+        STREAM["SSE Live Tail Stream<br/>(EventSource: /api/v1/logs/live-tail)"]
+        ANOM_ALERT["Threat & Anomaly Evaluation Cards"]
+    end
+
+    P1 -->|HTTP POST JSON| EP
+    P2 -->|HTTP POST JSON| EP
+    P3 -->|HTTP POST JSON| EP
+
+    EP -->|Status 202 Accepted| PARSE
+    PARSE --> FEAT
+    FEAT --> MODEL
+
+    MODEL -->|Prediction == 1| TAG_NORM
+    MODEL -->|Prediction == -1| TAG_ANOM
+
+    TAG_NORM --> DISPATCH
+    TAG_ANOM --> DISPATCH
+
+    DISPATCH -->|Buffer For ClickHouse| QUEUE
+    DISPATCH -->|Append To Cache| RING
+    DISPATCH -->|Real-Time Broadcast| SSE_HUB
+
+    SSE_HUB -->|Event: ai_anomaly or data| STREAM
+    STREAM --> DASH
+    STREAM --> ANOM_ALERT
+
+    QUEUE --> WORKER
+    WORKER -->|Batch Array Insert| CH_CLIENT
+    CH_CLIENT -->|Native Columnar Write| CH_TABLE
+    CH_TABLE -.->|10s Interval Aggregation SQL| DASH
+```
+
+---
+
+### Flowchart 2: Inline AI Anomaly Detection & Feature Engineering
+
+```mermaid
+flowchart LR
+    subgraph IN["Input"]
+        RAW["Raw Ingested Log Record<br/>{timestamp, host, service, level, message, metadata, ip}"]
+    end
+
+    subgraph EXT["9-Feature Extraction Pipeline (extract_log_features)"]
+        F1["1. Message Length<br/>len(log_str)"]
+        F2["2. Severity Weight<br/>(TRACE=0, INFO=2, WARN=4, ERROR=6, CRIT=8, FATAL=10)"]
+        F3["3. Payload Size<br/>Size of string after colon separator"]
+        F4["4. Digit Count<br/>Sum of numeric characters in message"]
+        F5["5. Special Char Count<br/>Sum of punctuation / non-alphanumeric chars"]
+        F6["6. Token Count<br/>Word count from split()"]
+        F7["7. IP Address Pattern Count<br/>Regex: \b(?:\d{1,3}\.){3}\d{1,3}\b"]
+        F8["8. Hex Memory Address Count<br/>Regex: \b(?:0x)?[0-9a-fA-F]{8,}\b"]
+        F9["9. Suspicious Keyword Matches<br/>('overflow', 'injection', 'denied', 'fatal', etc.)"]
+    end
+
+    subgraph VEC["Feature Vector"]
+        V["9-D Numerical Array<br/>[x1, x2, x3, x4, x5, x6, x7, x8, x9]"]
+    end
+
+    subgraph INF["Scikit-Learn Inference Engine"]
+        IFOREST["Isolation Forest Ensemble<br/>(Loaded via joblib.load)"]
+        SCORE{"Average Path Length<br/>Calculation in iTrees"}
+    end
+
+    subgraph OUT["Prediction & Routing"]
+        NORM_LOG["Normal Operation Log<br/>Prediction: +1<br/>Route: ClickHouse + Standard SSE"]
+        ANOM_LOG["Anomalous Threat Log<br/>Prediction: -1<br/>Action: Flag is_ai_anomaly: true<br/>Route: Event: ai_anomaly Broadcast"]
+    end
+
+    RAW --> EXT
+    EXT --> F1 & F2 & F3 & F4 & F5 & F6 & F7 & F8 & F9
+    F1 & F2 & F3 & F4 & F5 & F6 & F7 & F8 & F9 --> V
+    V --> IFOREST
+    IFOREST --> SCORE
+    SCORE -->|Score >= Threshold| NORM_LOG
+    SCORE -->|Short Path / Anomaly| ANOM_LOG
+```
+
+---
+
+### Flowchart 3: ClickHouse Storage & Columnar Analytics Flow
+
+```mermaid
+flowchart TD
+    subgraph INGEST["Micro-Batch Flush Ingestion"]
+        BATCH["Buffered Micro-Batch<br/>(Up to 500 records from asyncio.Queue)"]
+    end
+
+    subgraph STORAGE["ClickHouse Columnar Storage Engine"]
+        MT["MergeTree Table Engine<br/>Database: log_analytics | Table: logs"]
+        
+        subgraph PRIMARY_INDEX["Primary Sorting Key & Indexing"]
+            ORDER["ORDER BY (level, service, timestamp)"]
+            SPARSE["Sparse Primary Index Marks<br/>(index_granularity = 8192 rows per mark)"]
+        end
+
+        subgraph COLUMNS["Columnar Physical Layout (Disk / RAM)"]
+            C1["timestamp: DateTime64(3, 'UTC')"]
+            C2["level: LowCardinality(String)<br/>(1-Byte Dictionary Encoded)"]
+            C3["service: LowCardinality(String)<br/>(1-Byte Dictionary Encoded)"]
+            C4["host: LowCardinality(String)<br/>(1-Byte Dictionary Encoded)"]
+            C5["message: String (LZ4/ZSTD Compressed)"]
+            C6["metadata: String (Raw JSON string)"]
+            C7["ip: String (IPv4/IPv6 address)"]
+        end
+    end
+
+    subgraph QUERIES["Analytical REST Endpoints"]
+        Q1["GET /api/v1/analytics/overview<br/>- 10s Time-Bucket Error Counts<br/>- Top Failing Services (LIMIT 5)<br/>- Active Host Node Distribution<br/>- Overall System Health (NOMINAL/DEGRADED/CRITICAL)"]
+        Q2["GET /api/v1/logs<br/>- Parametric Filtering by Level/Host/Service<br/>- Fast SIMD Case-Insensitive ILIKE Substring Searches<br/>- Limit & Offset Pagination"]
+    end
+
+    BATCH -->|Native TCP Protocol Vector Insert| MT
+    MT --> PRIMARY_INDEX
+    PRIMARY_INDEX --> COLUMNS
+    COLUMNS -->|Vectorized SIMD Scan| Q1
+    COLUMNS -->|Index-Pruned Query Execution| Q2
+```
+
+---
+
+### Flowchart 4: Frontend State Architecture & SSE Communication
+
+```mermaid
+flowchart TD
+    subgraph BROWSER["Client Browser (React 18 + Vite + Tailwind CSS)"]
+        subgraph INIT["Connection Handshake"]
+            ES["new EventSource('/api/v1/logs/live-tail')"]
+        end
+
+        subgraph STATE["React Global & Component State"]
+            RING_STATE["logs State Array<br/>(Sliding Window: next.slice(-250))"]
+            PAUSE_STATE["isPaused Toggle State<br/>(Controlled via useRef & buttons)"]
+            FILTER_STATE["selectedLevel & searchTerm<br/>(Instant Client-Side Filtering)"]
+            TAB_STATE["activeTab State<br/>('dashboard' | 'livetail' | 'explorer')"]
+            AUTO_SCROLL["Internal Container Ref<br/>(scrollTop = scrollHeight)"]
+        end
+
+        subgraph VIEWS["Component Rendering Tree"]
+            APP["App.jsx (Root HUD Shell)"]
+            ALERTS["AnomalyAlerts.jsx<br/>(Threat Indicators & Service Failure Warnings)"]
+            CHARTS["ChartOverview.jsx<br/>(Recharts Time-Series & Distribution Radars)"]
+            LIVE_TAIL["LiveTail.jsx<br/>(SSE Live Streaming Terminal)"]
+            EXPLORER["LogExplorer.jsx<br/>(ClickHouse SQL Query Studio)"]
+        end
+    end
+
+    subgraph PROXY["Reverse Proxy Tier"]
+        NGINX["Nginx Web Server (:80 -> :3000)<br/>- proxy_buffering off<br/>- chunked_transfer_encoding off<br/>- proxy_read_timeout 86400s"]
+    end
+
+    subgraph SERVER["Backend Gateway (:8080)"]
+        SSE_EP["GET /api/v1/logs/live-tail<br/>(StreamingResponse: text/event-stream)"]
+        ANALYTICS_EP["GET /api/v1/analytics/overview<br/>(Polled every 5 seconds)"]
+    end
+
+    ES -->|HTTP GET Stream Request| NGINX
+    NGINX -->|Direct Unbuffered Proxy| SSE_EP
+
+    SSE_EP -->|event: data / ai_anomaly| ES
+    ES -->|onmessage & ai_anomaly listener| RING_STATE
+
+    RING_STATE --> FILTER_STATE
+    FILTER_STATE --> AUTO_SCROLL
+
+    APP --> ALERTS
+    APP --> CHARTS
+    APP --> LIVE_TAIL
+    APP --> EXPLORER
+
+    ANALYTICS_EP -.->|Polling JSON Payload| CHARTS
+    ANALYTICS_EP -.->|Health & Status Payload| ALERTS
+```
+
+---
+
+### Flowchart 5: Layered Tech Stack Ecosystem
+
+```mermaid
+flowchart TB
+    subgraph TIER1["PRODUCER LAYER"]
+        L1["Distributed Node Machines<br/>(web-node-01, auth-node-02, db-node-03)"]
+        L1_TOOL["Tooling: Python 3 Traffic Simulator / Urllib / Fluent Bit / Vector Forwarders"]
+    end
+
+    subgraph TIER2["INGESTION & ML GATEWAY LAYER"]
+        L2["FastAPI Async API Gateway<br/>(Port 8080)"]
+        L2_FEAT["AsyncIO Micro-Batch Worker (250ms / 500 items)<br/>In-Memory Ring Buffer Deque (Last 100 items)<br/>Scikit-Learn Isolation Forest AI Anomaly Model<br/>Python Dateutil & ClickHouse Connect Client"]
+    end
+
+    subgraph TIER3["DATABASE & DATA WAREHOUSE LAYER"]
+        L3["ClickHouse Columnar OLAP Database<br/>(Ports 8123 HTTP / 9000 Native TCP)"]
+        L3_FEAT["MergeTree Engine with Sparse Granularity (8192)<br/>Dictionary Compression: LowCardinality(String)<br/>Vectorized SIMD Analytics Engine (toStartOfInterval)"]
+    end
+
+    subgraph TIER4["REVERSE PROXY & CONTAINER LAYER"]
+        L4["Docker & Docker Compose Orchestration"]
+        L4_FEAT["Alpine Nginx Multi-Stage Static Server (Port 3000)<br/>Explicit Non-Buffering for Long-Lived SSE Connections<br/>Named Volume Persistence for ClickHouse Data"]
+    end
+
+    subgraph TIER5["PRESENTATION & UI DASHBOARD LAYER"]
+        L5["React 18 Single Page Application"]
+        L5_FEAT["Vite Ultra-Fast Build Engine & Bundler<br/>Tailwind CSS Modern Light Command Center Theme<br/>Recharts Time-Series & Interactive Distribution Radars<br/>Lucide React Icons & Native Browser EventSource SSE API"]
+    end
+
+    TIER1 ==>|HTTP REST JSON Payloads| TIER2
+    TIER2 ==>|High-Velocity Vectorized Inserts| TIER3
+    TIER3 -.->|Analytical Query Results| TIER2
+    TIER2 ==>|Server-Sent Events & REST APIs| TIER4
+    TIER4 ==>|Proxied Responses & Static Assets| TIER5
 ```
 
 ---

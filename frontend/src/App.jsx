@@ -161,6 +161,8 @@ export default function App() {
               <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">ACTIVE NODE CLUSTER</span>
               <div className="text-2xl font-black text-slate-900 mt-1">{activeHostsCount} / {activeHostsCount} HOSTS</div>
               <span className="text-[10px] text-emerald-700 font-bold flex items-center gap-1.5 mt-1">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                web, auth, db nodes
               </span>
             </div>
             <div className="p-2.5 rounded-lg bg-indigo-50 text-indigo-600 border border-indigo-200">
