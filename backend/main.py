@@ -15,6 +15,9 @@ import dateutil.parser
 import clickhouse_connect
 import re
 
+# ---> NEW AI IMPORT <---
+import google.generativeai as genai 
+
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("log_analyzer_backend")
@@ -27,7 +30,7 @@ DB_PASSWORD = os.getenv("DB_PASSWORD", "analyzer_secret")
 DB_NAME = os.getenv("DB_NAME", "log_analytics")
 PORT = int(os.getenv("PORT", "8080"))
 
-app = FastAPI(title="Centralized Log Analyzer Backend", version="1.0.0")
+app = FastAPI(title="Synapse Intelligence Hub API", version="1.0.0")
 
 # Enable CORS for all origins
 app.add_middleware(
@@ -674,3 +677,60 @@ async def explore_logs(
     except Exception as e:
         logger.error(f"Error querying logs from ClickHouse: {e}")
         raise HTTPException(status_code=500, detail=f"Database query failed: {str(e)}")
+
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+if GEMINI_API_KEY:
+    genai.configure(api_key=GEMINI_API_KEY)
+    ai_generative_model = genai.GenerativeModel('gemini-3.5-flash')
+else:
+    logger.warning("GEMINI_API_KEY not found. AI features will be disabled.")
+    ai_generative_model = None
+
+@app.post("/api/v1/ai/chat")
+async def ai_log_analysis(request: Request):
+    if not ai_generative_model:
+        raise HTTPException(status_code=503, detail="AI engine not configured (Missing API Key)")
+
+    data = await request.json()
+    chat_history = data.get("history", [])
+    target_alert = data.get("alert", None)
+
+    system_instruction = """
+    You are Synapse AI, an elite Site Reliability Engineer. 
+    Analyze the provided system alert or error context. Be concise and highly technical.
+    
+    CRITICAL RULE FOR FOLLOW-UPS:
+    If the user's latest message is a conversational acknowledgment (e.g., "okay", "got it", "thanks", "sounds good"), DO NOT repeat the incident summary, root cause, or remediation steps. Instead, briefly acknowledge their response in 1 sentence and ask if they need help executing any of the remediation steps or investigating a different service.
+    
+    Otherwise, if analyzing an alert, provide your response in plain text with clear spacing using these three sections:
+    
+    [ INCIDENT SUMMARY ]
+    (Provide a 1 sentence explanation)
+    
+    [ PROBABLE ROOT CAUSE ]
+    (Provide bullet points of the likely causes)
+    
+    [ REMEDIATION STEPS ]
+    (Provide actionable steps, include bash/SQL commands if applicable)
+    """
+
+    try:
+        if not chat_history and target_alert:
+            prompt = f"{system_instruction}\n\nANALYZE THIS SYSTEM ALERT CONTEXT:\n{target_alert}"
+            response = await asyncio.to_thread(ai_generative_model.generate_content, prompt)
+            return {"response": response.text}
+
+        else:
+            transcript = system_instruction + "\n\nCONVERSATION HISTORY:\n"
+            for msg in chat_history:
+                speaker = "User" if msg["role"] == "user" else "Synapse AI"
+                transcript += f"{speaker}: {msg['content']}\n"
+            
+            transcript += "\nSynapse AI:"
+            
+            response = await asyncio.to_thread(ai_generative_model.generate_content, transcript)
+            return {"response": response.text}
+
+    except Exception as e:
+        logger.error(f"Gemini AI Error: {e}")
+        raise HTTPException(status_code=500, detail=f"Synapse AI evaluation failed: {str(e)}")

@@ -27,7 +27,7 @@ class ErrorBoundary extends React.Component {
             onClick={() => window.location.reload()}
             style={{ marginTop: '20px', padding: '8px 16px', background: '#00f0ff', color: '#000', fontWeight: 'bold', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
           >
-            RELOAD COMMAND MATRIX
+            RELOAD INTELLIGENCE MATRIX
           </button>
         </div>
       );

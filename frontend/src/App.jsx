@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Activity,
   Server,
@@ -9,9 +9,13 @@ import {
   Database,
   Layers,
   Zap,
-  Radio,
-  Cpu,
   Compass,
+  Sparkles,
+  X,
+  Send,
+  AlertTriangle,
+  CheckCircle2,
+  Wrench
 } from 'lucide-react';
 
 import AnomalyAlerts from './components/AnomalyAlerts';
@@ -23,8 +27,42 @@ export default function App() {
   const [analyticsData, setAnalyticsData] = useState(null);
   const [timeRange, setTimeRange] = useState('15m');
   const [loadingAnalytics, setLoadingAnalytics] = useState(false);
-  const [activeTab, setActiveTab] = useState('dashboard'); // 'dashboard' | 'livetail' | 'explorer'
+  const [activeTab, setActiveTab] = useState('dashboard');
   const [selectedFilter, setSelectedFilter] = useState(null);
+
+  // --- AI DRAWER & RESIZING STATE ---
+  const [isAiDrawerOpen, setIsAiDrawerOpen] = useState(false);
+  const [drawerWidth, setDrawerWidth] = useState(450); // Default width in px
+  const [isResizing, setIsResizing] = useState(false);
+  const [chatHistory, setChatHistory] = useState([]);
+  const [isAiLoading, setIsAiLoading] = useState(false);
+  const [chatInput, setChatInput] = useState('');
+  const chatEndRef = useRef(null);
+
+  // Handle mouse resizing logic
+  useEffect(() => {
+    const handleMouseMove = (e) => {
+      if (!isResizing) return;
+      const newWidth = window.innerWidth - e.clientX;
+      if (newWidth > 320 && newWidth < window.innerWidth * 0.8) {
+        setDrawerWidth(newWidth);
+      }
+    };
+
+    const handleMouseUp = () => {
+      setIsResizing(false);
+    };
+
+    if (isResizing) {
+      window.addEventListener('mousemove', handleMouseMove);
+      window.addEventListener('mouseup', handleMouseUp);
+    }
+
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isResizing]);
 
   const fetchAnalytics = async () => {
     try {
@@ -47,9 +85,131 @@ export default function App() {
     return () => clearInterval(interval);
   }, [timeRange]);
 
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [chatHistory, isAiLoading]);
+
   const handleSelectFilter = (filter) => {
     setSelectedFilter(filter);
     setActiveTab('explorer');
+  };
+
+  const openAiDrawer = async (alertContext) => {
+    setIsAiDrawerOpen(true);
+    setIsAiLoading(true);
+    setChatHistory([{ role: 'assistant', content: 'Analyzing system alerts and fetching context...' }]);
+
+    try {
+      const res = await fetch('/api/v1/ai/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ alert: alertContext, history: [] }),
+      });
+      const data = await res.json();
+      
+      if (!res.ok) {
+        throw new Error(data.detail || 'API error occurred');
+      }
+      
+      setChatHistory([{ role: 'assistant', content: data.response }]);
+    } catch (err) {
+      setChatHistory([{ role: 'assistant', content: `⚠️ Synapse AI Error: ${err.message}` }]);
+    } finally {
+      setIsAiLoading(false);
+    }
+  };
+
+  const handleSendChat = async () => {
+    if (!chatInput.trim()) return;
+
+    const newHistory = [...chatHistory, { role: 'user', content: chatInput }];
+    setChatHistory(newHistory);
+    setChatInput('');
+    setIsAiLoading(true);
+
+    try {
+      const res = await fetch('/api/v1/ai/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ history: newHistory }),
+      });
+      const data = await res.json();
+      
+      if (!res.ok) {
+        throw new Error(data.detail || 'API error occurred');
+      }
+
+      setChatHistory([...newHistory, { role: 'assistant', content: data.response }]);
+    } catch (err) {
+      setChatHistory([...newHistory, { role: 'assistant', content: `⚠️ Synapse AI Error: ${err.message}` }]);
+    } finally {
+      setIsAiLoading(false);
+    }
+  };
+
+  // Helper function to clean markdown asterisks and format AI response cards cleanly
+  const cleanMarkdown = (text) => {
+    if (!text) return '';
+    return text.replace(/\*\*/g, '').replace(/__/g, '').replace(/\*/g, '');
+  };
+
+  const renderFormattedAiResponse = (content) => {
+    if (!content.includes('[ INCIDENT SUMMARY ]') && !content.includes('[ PROBABLE ROOT CAUSE ]')) {
+      return <p className="text-slate-800 text-xs whitespace-pre-wrap">{cleanMarkdown(content)}</p>;
+    }
+
+    const parts = content.split(/(\[ INCIDENT SUMMARY \]|\[ PROBABLE ROOT CAUSE \]|\[ REMEDIATION STEPS \])/g);
+    
+    return (
+      <div className="space-y-3 text-xs">
+        {parts.map((part, i) => {
+          if (part.includes('INCIDENT SUMMARY')) {
+            return (
+              <div key={i} className="bg-rose-50 border border-rose-200 rounded-lg p-2.5">
+                <span className="font-bold text-rose-700 flex items-center gap-1.5 mb-1">
+                  <AlertTriangle className="w-3.5 h-3.5" /> INCIDENT SUMMARY
+                </span>
+                <p className="text-slate-700 leading-relaxed">{cleanMarkdown(parts[i + 1])?.trim()}</p>
+              </div>
+            );
+          }
+          if (part.includes('PROBABLE ROOT CAUSE')) {
+            return (
+              <div key={i} className="bg-amber-50 border border-amber-200 rounded-lg p-2.5">
+                <span className="font-bold text-amber-700 flex items-center gap-1.5 mb-1">
+                  <Activity className="w-3.5 h-3.5" /> PROBABLE ROOT CAUSE
+                </span>
+                <div className="text-slate-700 space-y-1 pl-2">
+                  {parts[i + 1]?.split('\n').map((line, idx) => line.trim() && (
+                    <div key={idx} className="flex items-start gap-1.5">
+                      <span className="text-amber-500 font-bold">•</span>
+                      <span>{cleanMarkdown(line).replace(/^[-*•]\s*/, '')}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          }
+          if (part.includes('REMEDIATION STEPS')) {
+            return (
+              <div key={i} className="bg-emerald-50 border border-emerald-200 rounded-lg p-2.5">
+                <span className="font-bold text-emerald-700 flex items-center gap-1.5 mb-1">
+                  <Wrench className="w-3.5 h-3.5" /> REMEDIATION STEPS
+                </span>
+                <div className="text-slate-700 space-y-1 pl-2 font-mono text-[11px]">
+                  {parts[i + 1]?.split('\n').map((line, idx) => line.trim() && (
+                    <div key={idx} className="bg-white/80 border border-emerald-100 rounded px-2 py-1 my-1 text-slate-800">
+                      {cleanMarkdown(line).replace(/^[-*•\d.]+\s*/, '')}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          }
+          return null;
+        })}
+      </div>
+    );
   };
 
   const status = analyticsData?.system_status || 'HEALTHY';
@@ -58,8 +218,7 @@ export default function App() {
   const errorRate = analyticsData?.error_rate_percent || 0.0;
 
   return (
-    <div className="min-h-screen bg-slate-100 bg-grid-pattern text-slate-900 flex flex-col selection:bg-cyan-500 selection:text-white font-sans">
-      {/* Telemetry Command Header */}
+    <div className="min-h-screen bg-slate-100 bg-grid-pattern text-slate-900 flex flex-col selection:bg-cyan-500 selection:text-white font-sans relative overflow-x-hidden">
       <header className="sticky top-0 z-40 bg-white/90 backdrop-blur-xl border-b border-slate-200 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -69,14 +228,13 @@ export default function App() {
             <div>
               <div className="flex items-center gap-2">
                 <h1 className="text-sm font-mono font-extrabold text-slate-900 tracking-wider uppercase">
-                  PULSE // COMMAND CENTER
+                  SYNAPSE // INTELLIGENCE HUB
                 </h1>
               </div>
               <p className="text-[10px] font-mono text-slate-500">ClickHouse Engine • Micro-Batch Ingestion Pipeline</p>
             </div>
           </div>
 
-          {/* Center Mode Controls */}
           <div className="hidden md:flex items-center gap-1 bg-slate-100 p-1 rounded-lg border border-slate-200 font-mono text-xs shadow-inner">
             <button
               onClick={() => setActiveTab('dashboard')}
@@ -87,7 +245,7 @@ export default function App() {
               }`}
             >
               <Activity className="w-3.5 h-3.5" />
-              COMMAND MATRIX
+              INTELLIGENCE MATRIX
             </button>
             <button
               onClick={() => setActiveTab('livetail')}
@@ -113,7 +271,6 @@ export default function App() {
             </button>
           </div>
 
-          {/* Range & Refresh controls */}
           <div className="flex items-center gap-2 font-mono text-xs">
             <select
               value={timeRange}
@@ -137,11 +294,8 @@ export default function App() {
         </div>
       </header>
 
-      {/* Main Viewport */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex-1 w-full space-y-6">
-        {/* Metric Cards Bar */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 font-mono">
-          {/* Total Ingested Logs */}
           <div className="tactical-panel p-4 rounded-xl border border-slate-200 flex items-center justify-between">
             <div>
               <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">INGESTION VOLUME</span>
@@ -155,7 +309,6 @@ export default function App() {
             </div>
           </div>
 
-          {/* Active Nodes Count */}
           <div className="tactical-panel p-4 rounded-xl border border-slate-200 flex items-center justify-between">
             <div>
               <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">ACTIVE NODE CLUSTER</span>
@@ -170,7 +323,6 @@ export default function App() {
             </div>
           </div>
 
-          {/* Error Rate (%) */}
           <div className="tactical-panel p-4 rounded-xl border border-slate-200 flex items-center justify-between">
             <div>
               <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">ERROR FAILURE RATE</span>
@@ -184,7 +336,6 @@ export default function App() {
             </div>
           </div>
 
-          {/* System Status Banner */}
           <div className="tactical-panel p-4 rounded-xl border border-slate-200 flex items-center justify-between">
             <div>
               <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">SYSTEM STATUS HUD</span>
@@ -211,44 +362,94 @@ export default function App() {
           </div>
         </div>
 
-        {/* Mobile Tab Control */}
-        <div className="flex md:hidden items-center justify-center gap-1 bg-slate-200 p-1.5 rounded-lg border border-slate-300 font-mono text-xs">
-          <button
-            onClick={() => setActiveTab('dashboard')}
-            className={`px-3 py-1.5 rounded ${activeTab === 'dashboard' ? 'bg-cyan-600 text-white font-bold' : 'text-slate-600'}`}
-          >
-            MATRIX
-          </button>
-          <button
-            onClick={() => setActiveTab('livetail')}
-            className={`px-3 py-1.5 rounded ${activeTab === 'livetail' ? 'bg-cyan-600 text-white font-bold' : 'text-slate-600'}`}
-          >
-            STREAM
-          </button>
-          <button
-            onClick={() => setActiveTab('explorer')}
-            className={`px-3 py-1.5 rounded ${activeTab === 'explorer' ? 'bg-cyan-600 text-white font-bold' : 'text-slate-600'}`}
-          >
-            CLICKHOUSE
-          </button>
-        </div>
-
-        {/* Tab Views */}
         {activeTab === 'dashboard' && (
           <>
-            <AnomalyAlerts analyticsData={analyticsData} onSelectFilter={handleSelectFilter} />
+            <AnomalyAlerts analyticsData={analyticsData} onSelectFilter={handleSelectFilter} openAiDrawer={openAiDrawer} />
             <ChartOverview analyticsData={analyticsData} />
           </>
         )}
 
         {activeTab === 'livetail' && <LiveTail />}
 
-        {activeTab === 'explorer' && <LogExplorer initialFilter={selectedFilter} />}
+        {activeTab === 'explorer' && (
+          <LogExplorer initialFilter={selectedFilter} /> 
+        )}
       </main>
 
       <footer className="border-t border-slate-200 bg-white py-4 text-center text-xs font-mono text-slate-500">
-        <p>PULSE LOG ANALYZER • Fast-Path ClickHouse Columnar Database Telemetry Platform</p>
+        <p>SYNAPSE INTELLIGENCE • Fast-Path ClickHouse Columnar Database Telemetry Platform</p>
       </footer>
+
+      {/* --- RESIZABLE AI SLIDE-OUT DRAWER --- */}
+      <div
+        style={{ width: `${drawerWidth}px` }}
+        className={`fixed top-0 right-0 h-full bg-white shadow-2xl border-l border-slate-200 z-50 transition-transform duration-75 flex flex-col ${
+          isAiDrawerOpen ? 'translate-x-0' : 'translate-x-full'
+        }`}
+      >
+        {/* Resize Handle on the left edge */}
+        <div
+          onMouseDown={() => setIsResizing(true)}
+          className="absolute left-0 top-0 h-full w-1.5 cursor-ew-resize hover:bg-cyan-500 transition-colors z-10"
+          title="Drag to resize drawer"
+        />
+
+        <div className="flex items-center justify-between p-4 border-b border-slate-200 bg-slate-50">
+          <div className="flex items-center gap-2 text-cyan-700">
+            <Sparkles className="w-5 h-5" />
+            <h3 className="font-mono font-bold text-sm tracking-wide">SYNAPSE AI ENGINE</h3>
+          </div>
+          <button onClick={() => setIsAiDrawerOpen(false)} className="text-slate-400 hover:text-slate-700">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50 text-sm">
+          {chatHistory.map((msg, idx) => (
+            <div key={idx} className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
+              <div
+                className={`p-3 rounded-lg max-w-[95%] shadow-sm ${
+                  msg.role === 'user' ? 'bg-cyan-600 text-white text-xs' : 'bg-white border border-slate-200 w-full'
+                }`}
+              >
+                {msg.role === 'assistant' ? (
+                  renderFormattedAiResponse(msg.content)
+                ) : (
+                  msg.content
+                )}
+              </div>
+            </div>
+          ))}
+          {isAiLoading && (
+            <div className="flex items-start">
+              <div className="p-3 rounded-lg bg-white border border-slate-200 text-slate-500 shadow-sm flex items-center gap-2 text-xs font-mono">
+                <RefreshCw className="w-4 h-4 animate-spin text-cyan-600" /> Synapse AI is thinking...
+              </div>
+            </div>
+          )}
+          <div ref={chatEndRef} />
+        </div>
+
+        <div className="p-4 bg-white border-t border-slate-200">
+          <div className="flex items-center gap-2">
+            <input
+              type="text"
+              value={chatInput}
+              onChange={(e) => setChatInput(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleSendChat()}
+              placeholder="Ask a follow-up question..."
+              className="flex-1 border border-slate-300 rounded-md px-3 py-2 text-xs focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500"
+            />
+            <button
+              onClick={handleSendChat}
+              disabled={isAiLoading || !chatInput.trim()}
+              className="p-2 bg-cyan-600 text-white rounded-md hover:bg-cyan-700 disabled:opacity-50 transition-colors"
+            >
+              <Send className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
