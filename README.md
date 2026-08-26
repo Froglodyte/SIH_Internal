@@ -17,7 +17,7 @@
 
 ---
 
-## 📋 Table of Contents
+##  Table of Contents
 
 - [Executive Overview](#executive-overview)
 - [System Architecture & Data Flow](#system-architecture)
@@ -36,7 +36,7 @@
 
 <a id="executive-overview"></a>
 
-## 🚀 Executive Overview
+##  Executive Overview
 
 The **Centralized IT System Log & Telemetry Analyzer**, branded **Synapse // Intelligence Hub**, is an enterprise-grade, containerized log-ingestion, analytics, and real-time monitoring platform for mission-critical IT infrastructure.
 
@@ -68,7 +68,7 @@ Engineered to handle high-velocity log payloads without dropping streams, Synaps
 
 <a id="system-architecture"></a>
 
-## 🏗️ System Architecture & Data Flow
+## System Architecture & Data Flow
 
 ```mermaid
 flowchart TD
@@ -132,7 +132,7 @@ flowchart TD
 
 <a id="key-innovations"></a>
 
-## 🔥 Key Innovations & Technical Capabilities
+## Key Innovations & Technical Capabilities
 
 - **Sub-second columnar analytics:** ClickHouse MergeTree storage and `LowCardinality` strings for `host`, `service`, and `level` attributes.
 - **Micro-batch ingestion:** Groups high-rate HTTP ingest requests into asynchronous batch inserts, avoiding database-lock overhead.
@@ -190,7 +190,7 @@ flowchart TB
 
 <a id="database-schema"></a>
 
-## 🗄️ Database Schema Specification
+## Database Schema Specification
 
 **File:** `init-db/01_init.sql`
 
@@ -218,7 +218,7 @@ SETTINGS index_granularity = 8192;
 
 <a id="machine-learning"></a>
 
-## 🤖 Machine Learning Anomaly Detection Subsystem
+##  Machine Learning Anomaly Detection Subsystem
 
 The backend includes an inline AI engine that analyses incoming log streams for behavioral and structural anomalies before database persistence.
 
@@ -258,7 +258,7 @@ flowchart LR
 
 <a id="synapse-ai"></a>
 
-## 🧠 Synapse AI // LLM Diagnostic Engine (Gemini 3.5 Flash)
+##  Synapse AI // LLM Diagnostic Engine (Gemini 3.5 Flash)
 
 Built into the FastAPI backend and exposed through the React dashboard’s anomaly-evaluation matrix, the **Synapse AI Engine** uses Google’s Gemini 3.5 Flash model as an automated, on-call Site Reliability Engineer.
 
@@ -385,7 +385,7 @@ Built into the FastAPI backend and exposed through the React dashboard’s anoma
 
 <a id="performance-metrics"></a>
 
-## 📊 Performance Metrics & Benchmark Results
+## Performance Metrics & Benchmark Results
 
 | Metric / specification             |                       Target |               Measured performance |
 | ---------------------------------- | ---------------------------: | ---------------------------------: |
@@ -400,7 +400,7 @@ Built into the FastAPI backend and exposed through the React dashboard’s anoma
 
 <a id="getting-started"></a>
 
-## 💻 Getting Started & Deployment
+## Getting Started & Deployment
 
 ### Prerequisites
 
@@ -488,7 +488,7 @@ PORT=8080
 
 <a id="verification"></a>
 
-## 🧪 Verification & Test Scripts
+## Verification & Test Scripts
 
 The repository provides automated scripts in `scripts/`.
 
